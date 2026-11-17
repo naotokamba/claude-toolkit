@@ -10,15 +10,15 @@ HERE = Path(__file__).resolve().parent
 MODES_DIR = HERE / "modes"
 COMMON = HERE / "common.md"
 
-MODE_ORDER = ["目的", "発散", "収束", "作業", "理解"]
+MODE_ORDER = ["目的", "発散", "収束", "作業", "理解", "推理"]
 # 打つときの正式な名前は英語。表示は日本語のまま
-ENGLISH = {"目的": "purpose", "発散": "diverge", "収束": "converge", "作業": "work", "理解": "understand"}
+ENGLISH = {"目的": "purpose", "発散": "diverge", "収束": "converge", "作業": "work", "理解": "understand", "推理": "infer"}
 ALIASES = {en: ja for ja, en in ENGLISH.items()}
 ALIASES.update({en[0]: ja for ja, en in ENGLISH.items()})
 ALIASES["実装"] = "作業"
 OFF_WORDS = {"off", "q", "解除", "なし"}
 MODE_CMD_RE = re.compile(r"^\s*/mode(?=\s|$)\s*(\S+)?", re.S)
-SHORT_CMD_RE = re.compile(r"^\s*/([pdcwuq])(?=\s|$)")
+SHORT_CMD_RE = re.compile(r"^\s*/([pdcwuqi])(?=\s|$)")
 
 
 def available_modes():

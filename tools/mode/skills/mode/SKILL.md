@@ -1,8 +1,8 @@
 ---
 name: mode
-description: 会話のモードを切り替える。purpose・diverge・converge・work・understand・off。頭文字 p・d・c・w・u や日本語名でも指定できる。引数なしで今のモードと目的を表示
+description: 会話のモードを切り替える。purpose・diverge・converge・work・understand・infer・off。頭文字 p・d・c・w・u・i や日本語名でも指定できる。引数なしで今のモードと目的を表示
 disable-model-invocation: true
-argument-hint: "purpose | diverge | converge | work | understand | off [続けて話す内容]"
+argument-hint: "purpose | diverge | converge | work | understand | infer | off [続けて話す内容]"
 ---
 
 引数: $ARGUMENTS
