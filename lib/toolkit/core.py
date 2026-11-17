@@ -289,6 +289,14 @@ def link_skills(config_dir, dry_run):
             if not dry_run:
                 link.parent.mkdir(parents=True, exist_ok=True)
                 link.symlink_to(skill)
+    # このリポジトリから消えたスキルを指したまま切れているリンクを外す
+    skills = config_dir / "skills"
+    if skills.is_dir():
+        for link in sorted(skills.iterdir()):
+            if link.is_symlink() and not link.exists() and is_our_link(link):
+                print(f"  スキル {link.name}: このリポジトリから消えたのでリンクを外す")
+                if not dry_run:
+                    link.unlink()
 
 
 def install_one(config_dir, dry_run):
