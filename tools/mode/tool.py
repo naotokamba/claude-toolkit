@@ -38,10 +38,6 @@ def usable_names():
     return f"使えるのは {'・'.join(en)} と off。頭文字の {'・'.join(initials)} や、{'・'.join(modes)} でもよい"
 
 
-def goal_command(sid):
-    return f'{core.SELF} goal --session {sid} "<目的を1行で>"'
-
-
 def on_prompt(sid, prompt, state, info):
     short = SHORT_CMD_RE.match(prompt)
     m = MODE_CMD_RE.match(prompt)
@@ -72,7 +68,7 @@ def mode_lines(sid, state):
         f"記録済みの目的: {goal}" if goal else "記録済みの目的: まだない",
         f"{mode}モードのルール:",
     ]
-    lines += [l.replace("{goal_cmd}", goal_command(sid)) for l in core.read_lines(MODES_DIR / f"{mode}.md")]
+    lines += [l.replace("{goal_cmd}", core.goal_command(sid)) for l in core.read_lines(MODES_DIR / f"{mode}.md")]
     lines.append("全モード共通のルール:")
     lines += core.read_lines(COMMON)
     return lines

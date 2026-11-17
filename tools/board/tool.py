@@ -21,6 +21,8 @@ def on_prompt(sid, prompt, state, info):
         f"ボードを紐づけるコマンド: {core.SELF} board attach --session {sid} <ボードの URL>",
         f"検査するコマンド: {core.SELF} board check <フォルダ>",
         f"会話の記録ファイル: {info.get('transcript_path') or '不明'}",
+        f"記録済みの目的: {state.get('goal') or 'まだない'}",
+        f"目的を記録するコマンド: {core.goal_command(sid)}",
     ]
     if not state.get("board"):
         extra.append("このセッションに紐づいたボード: まだない")

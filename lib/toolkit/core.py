@@ -78,6 +78,10 @@ def take_session(args):
     return sid, rest
 
 
+def goal_command(sid):
+    return f'{SELF} goal --session {sid} "<目的を1行で>"'
+
+
 def read_lines(path):
     return [l.rstrip() for l in Path(path).read_text(encoding="utf-8").splitlines() if l.strip()]
 
