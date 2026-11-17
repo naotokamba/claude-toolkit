@@ -19,8 +19,12 @@ ALIASES["実装"] = "作業"
 OFF_WORDS = {"off", "q", "解除", "なし"}
 MODE_CMD_RE = re.compile(r"^\s*/mode(?=\s|$)\s*(\S+)?", re.S)
 SHORT_CMD_RE = re.compile(r"^\s*/([pdcwuqi])(?=\s|$)")
-# /dc は、発散を fork に任せてから収束に入る。モードは収束にする
-DC_CMD_RE = re.compile(r"^\s*/dc(?=\s|$)")
+# /dc と /idc は、fork に任せた発散や調査のあとで収束に入る。モードは収束にする
+COMBO_CMDS = {
+    "dc": "発散を fork に任せてから収束に入る",
+    "idc": "調査と発散を fork に任せてから収束に入る",
+}
+COMBO_CMD_RE = re.compile(r"^\s*/(dc|idc)(?=\s|$)")
 
 
 def available_modes():
@@ -41,10 +45,12 @@ def usable_names():
 
 
 def on_prompt(sid, prompt, state, info):
-    if DC_CMD_RE.match(prompt):
+    combo = COMBO_CMD_RE.match(prompt)
+    if combo:
         state["mode"] = "収束"
         core.save_state(sid, state)
-        return {"header": "ユーザーが /dc で、発散を fork に任せてから収束に入るよう求めた。モードは「収束」にした。"}
+        name = combo.group(1)
+        return {"header": f"ユーザーが /{name} で、{COMBO_CMDS[name]}よう求めた。モードは「収束」にした。"}
     short = SHORT_CMD_RE.match(prompt)
     m = MODE_CMD_RE.match(prompt)
     if not short and not m:
