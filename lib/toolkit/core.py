@@ -26,12 +26,11 @@ TOOLS_DIR = REPO / "tools"
 RULES_DIR = REPO / "rules"
 STATE_BASE = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
 STATE_DIR = STATE_BASE / NAME
-OLD_STATE_DIRS = [STATE_BASE / "claude-modes"]
 SESSIONS_DIR = STATE_DIR / "sessions"
 ERROR_LOG = STATE_DIR / "error.log"
 SID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
-OUR_COMMAND_RE = re.compile(r"claude-(?:modes|toolkit)\s+(hook|statusline)\b")
-OUR_ALLOW_RE = re.compile(r"claude-(?:modes|toolkit) \S+ \*\)$")
+OUR_COMMAND_RE = re.compile(r"claude-toolkit\s+(hook|statusline)\b")
+OUR_ALLOW_RE = re.compile(r"claude-toolkit \S+ \*\)$")
 
 
 # ---------- 状態 ----------
@@ -258,10 +257,15 @@ def merge_settings(settings):
     return changes
 
 
-def ours_or_dangling(link):
-    """前の場所を指したままのリンクなら True。"""
+def is_our_link(link):
+    """このリポジトリのスキルを指すリンクなら True。リポジトリを動かす前の場所を指すものも含む。"""
     target = os.readlink(link)
-    return not link.exists() or "/claude-modes/" in target or "/claude-toolkit/" in target
+    try:
+        if Path(link.parent, target).resolve().is_relative_to(TOOLS_DIR.resolve()):
+            return True
+    except OSError:
+        pass
+    return "/claude-toolkit/tools/" in target
 
 
 def link_skills(config_dir, dry_run):
@@ -271,7 +275,7 @@ def link_skills(config_dir, dry_run):
             if link.resolve() == skill.resolve():
                 print(f"  スキル {skill.name}: リンク済み")
                 continue
-            if not ours_or_dangling(link):
+            if not is_our_link(link):
                 print(f"  スキル {skill.name}: 注意: {link} は別の場所 {os.readlink(link)} を指しているので触っていない")
                 continue
             print(f"  スキル {skill.name}: {link} を {skill} に張り替える")
@@ -297,7 +301,18 @@ def install_one(config_dir, dry_run):
     path = config_dir / "settings.json"
     original = path.read_text(encoding="utf-8") if path.exists() else "{}"
     settings = json.loads(original)
-    changes = merge_settings(settings)
+    write_settings(path, original, settings, merge_settings(settings), dry_run)
+
+
+def profile_dirs(args):
+    dirs = [Path(a).expanduser() for a in args if a != "--dry-run"]
+    if not dirs:
+        # ホーム直下の .claude と .claude-* のディレクトリを、すべてプロファイルとして扱う
+        dirs = sorted(p for p in Path.home().glob(".claude*") if p.is_dir() and re.fullmatch(r"\.claude(-.+)?", p.name))
+    return dirs
+
+
+def write_settings(path, original, settings, changes, dry_run):
     new_text = json.dumps(settings, ensure_ascii=False, indent=2) + "\n"
     if new_text == original or json.loads(new_text) == json.loads(original):
         print("  settings.json: 変更なし" + "".join(f"\n    {c}" for c in changes if c.startswith("注意")))
@@ -314,33 +329,83 @@ def install_one(config_dir, dry_run):
     path.write_text(new_text, encoding="utf-8")
 
 
-def migrate_state(dry_run):
-    """前の名前の状態のフォルダから、セッションの状態を引き継ぐ。"""
-    for old in OLD_STATE_DIRS:
-        old_sessions = old / "sessions"
-        if not old_sessions.is_dir():
-            continue
-        moved = 0
-        for f in old_sessions.glob("*.json"):
-            dest = SESSIONS_DIR / f.name
-            if dest.exists():
+def strip_settings(settings):
+    """install が足したものだけを settings から外し、外した内容の説明を返す。"""
+    changes = []
+    hooks = settings.get("hooks")
+    if isinstance(hooks, dict):
+        for event in list(hooks):
+            groups = hooks[event]
+            if not isinstance(groups, list):
                 continue
-            moved += 1
-            if not dry_run:
-                SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
-                os.replace(f, dest)
-        print(f"== 状態: {old_sessions} から {moved} 件を {SESSIONS_DIR} に移す")
+            touched = False
+            for g in list(groups):
+                hs = g.get("hooks") if isinstance(g, dict) else None
+                if not isinstance(hs, list):
+                    continue
+                kept = [h for h in hs if not (isinstance(h.get("command"), str) and OUR_COMMAND_RE.search(h["command"]))]
+                if len(kept) != len(hs):
+                    touched = True
+                    changes.append(f"{event} のフックを外す")
+                    if kept:
+                        g["hooks"] = kept
+                    else:
+                        groups.remove(g)
+            if touched and not groups:
+                del hooks[event]
+        if not hooks and changes:
+            del settings["hooks"]
+    sl = settings.get("statusLine")
+    if isinstance(sl, dict) and isinstance(sl.get("command"), str) and OUR_COMMAND_RE.search(sl["command"]):
+        del settings["statusLine"]
+        changes.append("ステータスラインを外す")
+    perms = settings.get("permissions")
+    if isinstance(perms, dict) and isinstance(perms.get("allow"), list):
+        ours = [r for r in perms["allow"] if isinstance(r, str) and OUR_ALLOW_RE.search(r)]
+        for r in ours:
+            perms["allow"].remove(r)
+            changes.append(f"許可リストから外す: {r}")
+        if ours and not perms["allow"]:
+            del perms["allow"]
+            if not perms:
+                del settings["permissions"]
+    return changes
+
+
+def uninstall_one(config_dir, dry_run):
+    print(f"== {config_dir}")
+    if not config_dir.is_dir():
+        print("  ディレクトリがないので飛ばした")
+        return
+    skills = config_dir / "skills"
+    if skills.is_dir():
+        for link in sorted(skills.iterdir()):
+            if link.is_symlink() and is_our_link(link):
+                print(f"  スキル {link.name}: リンクを外す")
+                if not dry_run:
+                    link.unlink()
+    path = config_dir / "settings.json"
+    if not path.exists():
+        print("  settings.json: ない")
+        return
+    original = path.read_text(encoding="utf-8")
+    settings = json.loads(original)
+    write_settings(path, original, settings, strip_settings(settings), dry_run)
+
+
+def cmd_uninstall(args):
+    dry_run = "--dry-run" in args
+    for d in profile_dirs(args):
+        uninstall_one(d, dry_run)
+    print(f"セッションの状態 {STATE_DIR} は残している。要らなければ消してよい")
+    if dry_run:
+        print("(--dry-run なので何も書き換えていない)")
 
 
 def cmd_install(args):
     dry_run = "--dry-run" in args
-    dirs = [Path(a).expanduser() for a in args if a != "--dry-run"]
-    if not dirs:
-        # ホーム直下の .claude と .claude-* のディレクトリを、すべてプロファイルとして扱う
-        dirs = sorted(p for p in Path.home().glob(".claude*") if p.is_dir() and re.fullmatch(r"\.claude(-.+)?", p.name))
-    for d in dirs:
+    for d in profile_dirs(args):
         install_one(d, dry_run)
-    migrate_state(dry_run)
     if dry_run:
         print("(--dry-run なので何も書き換えていない)")
 
@@ -354,12 +419,14 @@ USAGE = f"""{NAME}: Claude Code で使う道具の集まり
   statusline      ステータスラインから呼ばれる
   install [--dry-run] [設定ディレクトリ...]
                   スキルのリンクと settings.json の設定を入れる。省略時はホーム直下の .claude と .claude-* すべて
+  uninstall [--dry-run] [設定ディレクトリ...]
+                  install で入れたものを外す。対象の決め方は install と同じ
 道具ごとのサブコマンド:
 """
 
 
 def main():
-    commands = {"hook": cmd_hook, "statusline": cmd_statusline, "install": cmd_install}
+    commands = {"hook": cmd_hook, "statusline": cmd_statusline, "install": cmd_install, "uninstall": cmd_uninstall}
     tool_cmds = {}
     for t in tools():
         for name, fn in getattr(t, "COMMANDS", {}).items():

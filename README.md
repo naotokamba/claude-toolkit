@@ -116,6 +116,16 @@ bin/claude-toolkit install --dry-run       # 何が変わるかだけ見る
 
 スキルのリンクと、`settings.json` へのフック・ステータスライン・許可ルールの追加を行う。何度流しても同じ結果になる。
 
+## 外すとき
+
+```
+bin/claude-toolkit uninstall                 # ホーム直下の .claude と .claude-* すべて
+bin/claude-toolkit uninstall ~/.claude-work  # 指定したものだけ
+bin/claude-toolkit uninstall --dry-run       # 何が外れるかだけ見る
+```
+
+install で足したものだけを外す。このリポジトリを指すスキルのリンク、フック、ステータスライン、許可ルールの 4 つ。ほかの設定には触らず、書き換える前に settings.json のバックアップを残す。セッションの状態 `~/.local/state/claude-toolkit/` は残すので、要らなければ消す。
+
 ## 困ったとき
 
 - `bin/claude-toolkit mode show 発散` で、そのモードで AI に渡す文面を確認できる
