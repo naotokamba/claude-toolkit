@@ -6,6 +6,9 @@ from toolkit import core
 
 ORDER = 15
 N_CMD_RE = re.compile(r"^\s*/n(?=\s|$)")
+# 件が切り替わった直後は、読み手が経緯を覚えていないので、返事の最初に概要を置かせる
+OVERVIEW = ("返事の最初に、「この件」として、今の 1 件が何をする件かと、どんな困りごとから生まれた件かを 1 行ずつ書く。"
+            "読み手は、別の件から切り替わってきたばかりで、この件の経緯を覚えていない。起点の issue やカードが分かっていれば、その言葉にリンクを付け、分からなければ分からないと書く")
 
 
 def queue(state):
@@ -39,7 +42,7 @@ def on_prompt(sid, prompt, state, info):
     core.save_state(sid, state)
     if not q:
         return {"header": f"ユーザーが /n で次に進んだ。「{done}」で、順番の最後まで終わった。"}
-    return {"header": f"ユーザーが /n で次の 1 件に進んだ。終えた件: {done}"}
+    return {"header": f"ユーザーが /n で次の 1 件に進んだ。終えた件: {done}", "extra": [OVERVIEW]}
 
 
 def context(sid, state, info):
