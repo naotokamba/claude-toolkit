@@ -25,6 +25,8 @@ COMBO_CMDS = {
     "idc": "調査と発散を fork に任せてから収束に入る",
 }
 COMBO_CMD_RE = re.compile(r"^\s*/(dc|idc)(?=\s|$)")
+# /n c のように /n に続けたコマンドは、そのコマンドを打ったのと同じに扱う
+N_FOLLOW_RE = re.compile(r"^\s*/n\s+(p|d|c|w|u|i|dc|idc)(?=\s|$)(.*)$", re.S)
 
 
 def available_modes():
@@ -44,7 +46,28 @@ def usable_names():
     return f"使えるのは {'・'.join(en)} と off。頭文字の {'・'.join(initials)} や、{'・'.join(modes)} でもよい"
 
 
+def skill_body(name):
+    """スキルの本文から、前書きと引数の行を除いたもの。"""
+    text = (Path(__file__).resolve().parent / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+    if text.startswith("---"):
+        text = text.split("---", 2)[2]
+    return [l for l in text.strip().splitlines() if l.strip() and not l.startswith("引数:")]
+
+
+def follow_extra(name, rest):
+    """/n に続けたコマンドの手順を、ファイルを読ませずにそのまま渡す。"""
+    said = rest.strip() or "今の 1 件"
+    if name in COMBO_CMDS:
+        return [f"/n に続けて /{name} が打たれた。議題: {said}。次の手順に従う。"] + skill_body(name)
+    return [f"/n に続けて /{name} が打たれた。「{said}」を、このモードでのユーザーの発言として扱い、そのモードのルールで応答する。"]
+
+
 def on_prompt(sid, prompt, state, info):
+    follow = N_FOLLOW_RE.match(prompt)
+    if follow:
+        result = on_prompt(sid, f"/{follow.group(1)}{follow.group(2)}", state, info) or {}
+        result["extra"] = result.get("extra", []) + follow_extra(follow.group(1), follow.group(2))
+        return result
     combo = COMBO_CMD_RE.match(prompt)
     if combo:
         state["mode"] = "収束"
