@@ -147,6 +147,8 @@ def build_context(sid, state, headers, extras, transcript_path=None):
         lines += ls or []
     lines.append("ユーザーへの返答の書き方:")
     lines += read_lines(RULES_DIR / "writing.md")
+    lines.append("issue に残すときの決まり:")
+    lines += read_lines(RULES_DIR / "issue.md")
     lines.append(f"</{NAME}>")
     return "\n".join(lines)
 
